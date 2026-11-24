@@ -35,6 +35,16 @@ then the FastAPI app serves `frontend/dist` itself on 7860.
 Without keys the voice button reports what is missing and the text box in
 the call panel still books through the same tools and database.
 
+## Notes for reviewers
+
+- Caller identity is the spoken phone number only, per the brief. That is
+  the assignment's rule, not a production auth story: anyone who knows a
+  number could cancel its bookings. A real deployment would add OTP.
+- The dashboard masks phone digits (`••••••3210`). The full number stays
+  in SQLite because the voice tools match on it.
+- The voice agent is instructed to read the number back and wait for a yes
+  before booking or cancelling. That rule lives in the agent prompt.
+
 ## How a call works
 
 1. The browser posts an SDP offer to `POST /api/call/offer`.
