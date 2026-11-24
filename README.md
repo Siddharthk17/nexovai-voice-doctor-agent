@@ -11,7 +11,7 @@ every step live. Caller identity is the phone number spoken on the call.
 | Voice pipeline | Pipecat 1.17 (Python 3.11) |
 | STT | ElevenLabs `scribe_v2` |
 | TTS | ElevenLabs `eleven_flash_v2_5` |
-| LLM | Google Gemini `gemini-2.5-flash` |
+| LLM | Google Gemini `gemini-3-flash-preview` |
 | Turn-taking | Silero VAD |
 | Browser media | WebRTC via Pipecat SmallWebRTC transport |
 | Server | FastAPI, SQLite |

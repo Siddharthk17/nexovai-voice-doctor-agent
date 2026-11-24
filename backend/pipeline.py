@@ -131,7 +131,13 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
     """Run one WebRTC call. Returns when the caller hangs up."""
     from pipecat.audio.vad.silero import SileroVADAnalyzer
     from pipecat.audio.vad.vad_analyzer import VADParams
-    from pipecat.frames.frames import EndFrame, ErrorFrame, TextFrame, TranscriptionFrame
+    from pipecat.frames.frames import (
+        BotStoppedSpeakingFrame,
+        EndFrame,
+        ErrorFrame,
+        TextFrame,
+        TranscriptionFrame,
+    )
     from pipecat.processors.frame_processor import FrameDirection
     from pipecat.observers.base_observer import BaseObserver, FramePushed
     from pipecat.pipeline.pipeline import Pipeline
@@ -159,6 +165,7 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
             super().__init__()
             self._last_role = ""
             self._last_text = ""
+            self._agent_buffer = ""
 
         async def _say(self, role: str, text: str) -> None:
             text = (text or "").strip()
@@ -172,12 +179,30 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
             except Exception:
                 pass
 
+        async def _agent_chunk(self, text: str) -> None:
+            piece = text or ""
+            if self._agent_buffer and piece and not self._agent_buffer.endswith((" ", "\n")):
+                if not piece.startswith((" ", ",", ".", "?", "!", "'", "’", "-", ":", ";")):
+                    piece = " " + piece
+            self._agent_buffer += piece
+            if piece and piece[-1] in ".?!":
+                await self._say("agent", self._agent_buffer)
+                self._agent_buffer = ""
+
+        async def _flush_agent(self) -> None:
+            if self._agent_buffer.strip():
+                await self._say("agent", self._agent_buffer)
+            self._agent_buffer = ""
+
         async def on_push_frame(self, data: FramePushed) -> None:
             frame = data.frame
             if isinstance(frame, TranscriptionFrame):
+                await self._flush_agent()
                 await self._say("caller", frame.text)
             elif isinstance(frame, TextFrame) and data.direction == FrameDirection.DOWNSTREAM:
-                await self._say("agent", frame.text)
+                await self._agent_chunk(frame.text)
+            elif isinstance(frame, BotStoppedSpeakingFrame):
+                await self._flush_agent()
             elif isinstance(frame, ErrorFrame):
                 try:
                     await publish({"type": "call_error", "error": str(frame.error)[:200]})
