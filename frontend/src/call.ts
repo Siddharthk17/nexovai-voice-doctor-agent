@@ -1,6 +1,6 @@
 import { api } from "./api";
 
-export type CallState = "dialling" | "ringing" | "connected" | "ended" | "failed";
+export type CallState = "idle" | "dialling" | "ringing" | "connected" | "ended" | "failed";
 
 /** One browser call: mic in, agent audio out, signalling over /api/call/offer. */
 export class VoiceCall {

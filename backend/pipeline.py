@@ -24,6 +24,7 @@ def build_function_schemas(
     from pipecat.services.llm_service import FunctionCallParams
 
     from . import tools
+    from .store import pretty_when
 
     async def _emit(event: dict) -> None:
         try:
@@ -55,7 +56,7 @@ def build_function_schemas(
                 {
                     "type": "transcript",
                     "role": "system",
-                    "text": f"Booked {out['doctor']} on {out['starts_at']}",
+                    "text": f"Booked {out['doctor']} on {pretty_when(out['starts_at'])}",
                 }
             )
         await params.result_callback(out)

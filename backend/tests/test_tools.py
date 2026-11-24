@@ -71,3 +71,18 @@ def test_availability_filters_by_date():
     day = first["starts_at"][:10]
     out = tools.check_doctor_availability(db, date=day)
     assert out["ok"] and all(s["starts_at"].startswith(day) for s in out["slots"])
+
+
+def test_plain_words_match_specialities():
+    db = fresh_db()
+    assert tools.check_doctor_availability(db, doctor="skin")["slots"]
+    assert all(
+        s["speciality"] == "Dermatology"
+        for s in tools.check_doctor_availability(db, doctor="skin")["slots"]
+    )
+    assert tools.check_doctor_availability(db, doctor="child")["slots"]
+
+
+def test_pretty_when_keeps_bad_input():
+    assert store.pretty_when("2026-11-25T09:00:00+05:30") == "Wed 25 Nov, 9:00 am"
+    assert store.pretty_when("nope") == "nope"

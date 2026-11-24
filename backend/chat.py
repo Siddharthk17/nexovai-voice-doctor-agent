@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from . import tools
-from .store import normalise_phone
+from .store import normalise_phone, pretty_when
 
 PHONE_RE = re.compile(r"(\+?\d[\d\s\-]{8,}\d)")
 DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
@@ -44,14 +43,6 @@ def _looks_book(text: str) -> bool:
     return any(w in low for w in ("book", "confirm", "reserve", "schedule", "appointment for"))
 
 
-def _pretty(iso: str) -> str:
-    try:
-        d = datetime.fromisoformat(iso)
-        return d.strftime("%a %-d %b, %-I:%M %p").replace("AM", "am").replace("PM", "pm")
-    except ValueError:
-        return iso
-
-
 def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") -> dict:
     """Run one chat turn. Returns reply plus events the dashboard consumes."""
     session = SESSIONS.setdefault(session_id or "anon", ChatSession())
@@ -78,14 +69,15 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
             return {"reply": "Sure. Which phone number did you book with? Say all 10 digits.", "events": events}
         out = tools.cancel_appointment(db_path, phone)
         if out.get("needs_choice"):
-            options = "; ".join(f"{a['doctor']} on {a['starts_at']}" for a in out["appointments"])
+            options = "; ".join(f"{a['doctor']} on {pretty_when(a['starts_at'])}" for a in out["appointments"])
             reply = f"Found {len(out['appointments'])} bookings: {options}. Which one should I cancel?"
             return {"reply": reply, "events": events, "choices": out["appointments"], "phone": phone}
         if out["ok"]:
             events.append({"type": "appointments_changed", "highlight": out["appointment_id"]})
             return {
-                "reply": f"Cancelled your visit with {out['doctor']} on {out['starts_at']}.",
+                "reply": f"Cancelled your visit with {out['doctor']} on {pretty_when(out['starts_at'])}.",
                 "events": events, "phone": phone,
+                "cancelled_id": out["appointment_id"],
             }
         return {"reply": f"Could not cancel: {out['error']}.", "events": events, "phone": phone}
 
@@ -102,7 +94,7 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
             events.append({"type": "appointments_changed", "highlight": out["appointment_id"]})
             events.append({"type": "booking_confirmed", "appointment": out})
             return {
-                "reply": f"Booked with {out['doctor']} on {_pretty(out['starts_at'])}. Booking {out['appointment_id']}.",
+                "reply": f"Booked with {out['doctor']} on {pretty_when(out['starts_at'])}. Booking {out['appointment_id']}.",
                 "events": events, "phone": phone,
             }
         return {"reply": f"Could not book: {out['error']}.", "events": events, "phone": phone}
@@ -120,5 +112,5 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
         return {"reply": "Nothing open for that search. Try another doctor or day.", "events": events}
     session.last_slots = out["slots"]
     first = out["slots"][0]
-    reply = f"{len(out['slots'])} open. Earliest: {first['doctor']} on {_pretty(first['starts_at'])}."
+    reply = f"{len(out['slots'])} open. Earliest: {first['doctor']} on {pretty_when(first['starts_at'])}."
     return {"reply": reply, "events": events, "slots": out["slots"], "phone": phone}

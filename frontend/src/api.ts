@@ -57,7 +57,7 @@ export const api = {
       body: JSON.stringify({ phone, appointment_id }),
     }),
   chat: (session_id: string, message: string, slot_id = "") =>
-    json<{ reply: string; events: DashEvent[]; slots?: Slot[]; choices?: Appointment[]; phone?: string }>(
+    json<{ reply: string; events: DashEvent[]; slots?: Slot[]; choices?: Appointment[]; phone?: string; cancelled_id?: string }>(
       "/api/chat",
       { method: "POST", body: JSON.stringify({ session_id, message, slot_id }) },
     ),

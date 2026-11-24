@@ -119,6 +119,7 @@ export default function App() {
       const out = await api.chat(sessionId, text);
       pushLine("agent", out.reply);
       setDockSlots(out.slots ?? []);
+      if (out.cancelled_id) setConfirm(null);
     } catch {
       pushLine("agent", "The desk is unreachable. Check the server and try again.");
     }

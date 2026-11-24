@@ -58,6 +58,15 @@ def normalise_phone(raw: str) -> str:
     return digits[-10:]
 
 
+def pretty_when(iso: str) -> str:
+    """'2026-11-25T09:00:00+05:30' -> 'Wed 25 Nov, 9:00 am'. Never raises."""
+    try:
+        moment = datetime.fromisoformat(iso)
+        return moment.strftime("%a %-d %b, %-I:%M %p").replace("AM", "am").replace("PM", "pm")
+    except ValueError:
+        return iso
+
+
 def connect(db_path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row

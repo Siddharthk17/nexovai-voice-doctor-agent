@@ -18,6 +18,7 @@ type Props = {
 };
 
 const STATE_WORDS: Record<CallState, string> = {
+  idle: "Messages",
   dialling: "Dialling",
   ringing: "Ringing",
   connected: "Connected",
@@ -41,7 +42,7 @@ function fmtChip(iso: string): string {
 
 export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, onPickSlot, onSendChat }: Props) {
   const [call] = useState(() => new VoiceCall());
-  const [state, setState] = useState<CallState>("ended");
+  const [state, setState] = useState<CallState>("idle");
   const [detail, setDetail] = useState("");
   const [muted, setMuted] = useState(false);
   const [seconds, setSeconds] = useState(0);
