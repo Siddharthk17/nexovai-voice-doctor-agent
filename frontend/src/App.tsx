@@ -65,7 +65,10 @@ export default function App() {
         } else if (msg.type === "booking_confirmed") {
           const appt = msg.appointment as Record<string, string>;
           setConfirm(appt);
-          pushLine("system", `Booked ${appt.doctor} on ${appt.starts_at}`);
+          const when = new Date(appt.starts_at);
+          const day = when.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+          const time = when.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+          pushLine("system", `Booked ${appt.doctor} on ${day}, ${time}`);
         } else if (msg.type === "caller_known" && typeof msg.phone === "string") {
           setCallerPhone(msg.phone);
         } else if (msg.type === "call_error") {
