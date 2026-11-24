@@ -16,6 +16,30 @@ from .store import connect, normalise_phone
 
 MAX_OFFERED_SLOTS = 8
 
+SPECIALITY_WORDS = {
+    "skin": "dermatology",
+    "hair": "dermatology",
+    "bone": "orthopaedics",
+    "joint": "orthopaedics",
+    "fracture": "orthopaedics",
+    "child": "paediatrics",
+    "kid": "paediatrics",
+    "baby": "paediatrics",
+    "fever": "general physician",
+    "cold": "general physician",
+    "general": "general physician",
+}
+
+
+def _doctor_variants(query: str) -> list[str]:
+    """The caller says 'skin', the board says 'dermatology'. Bridge that."""
+    words = [query]
+    low = query.lower()
+    for plain, speciality in SPECIALITY_WORDS.items():
+        if plain in low:
+            words.append(speciality)
+    return words
+
 
 def _doctor_rows(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
     return {r["id"]: r for r in conn.execute("SELECT * FROM doctors")}
@@ -33,10 +57,12 @@ def check_doctor_availability(
     try:
         doctors = _doctor_rows(conn)
         want = (doctor or "").strip().lower()
+        variants = _doctor_variants(want)
         matched_ids = [
             d["id"]
             for d in doctors.values()
-            if not want or want in d["name"].lower() or want in d["speciality"].lower()
+            if not want
+            or any(v in d["name"].lower() or v in d["speciality"].lower() for v in variants)
         ]
         if want and not matched_ids:
             return {
