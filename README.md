@@ -90,3 +90,8 @@ frontend/src/         ledger panels, phone dock, waveform, sounds
 .venv/bin/python -m pytest backend/tests -q
 cd frontend && npm run build
 ```
+
+## Demo
+
+`demo/booking-flow.mp4` — caller gives a phone number, checks availability,
+books, then cancels, all updating the day book live.
