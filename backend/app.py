@@ -34,15 +34,16 @@ class Hub:
         self.sockets: set[WebSocket] = set()
 
     async def publish(self, event: dict) -> None:
-        dead: list[WebSocket] = []
         payload = json.dumps(event)
-        for sock in self.sockets:
+        targets = list(self.sockets)
+
+        async def send(sock: WebSocket) -> None:
             try:
                 await asyncio.wait_for(sock.send_text(payload), timeout=2)
             except Exception:
-                dead.append(sock)
-        for sock in dead:
-            self.sockets.discard(sock)
+                self.sockets.discard(sock)
+
+        await asyncio.gather(*(send(sock) for sock in targets))
 
 
 hub = Hub()
@@ -129,8 +130,12 @@ async def call_offer(body: OfferIn):
         )
 
         def _log_failure(task: asyncio.Task) -> None:
-            if not task.cancelled() and task.exception() is not None:
-                print(f"voice pipeline failed: {task.exception()!r}", flush=True)
+            if task.cancelled() or task.exception() is None:
+                return
+            print(f"voice pipeline failed: {task.exception()!r}", flush=True)
+            asyncio.get_running_loop().create_task(
+                hub.publish({"type": "call_error", "error": "voice pipeline stopped"})
+            )
 
         pipeline_task.add_done_callback(_log_failure)
         await hub.publish({"type": "call_started", "pc_id": connection.pc_id})
@@ -141,7 +146,13 @@ async def call_offer(body: OfferIn):
     )
     if not answer:
         return {"ok": False, "error": "webrtc negotiation failed"}
-    await hub.publish({"type": "transcript", "role": "agent", "text": "Hello, NexovAI Care. What do you need today?"})
+    await hub.publish(
+        {
+            "type": "transcript",
+            "role": "system",
+            "text": "Connected. Say hello — the desk is listening.",
+        }
+    )
     return {"ok": True, **answer}
 
 
@@ -226,11 +237,12 @@ async def dashboard_socket(sock: WebSocket):
 
 DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 if DIST.exists():
+    DIST_RESOLVED = DIST.resolve()
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
     def spa(full_path: str):
-        target = DIST / full_path
-        if full_path and target.is_file():
+        target = (DIST / full_path).resolve()
+        if full_path and target.is_file() and target.is_relative_to(DIST_RESOLVED):
             return FileResponse(target)
         return FileResponse(DIST / "index.html")

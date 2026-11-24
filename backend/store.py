@@ -84,10 +84,25 @@ def init_db(db_path: str | Path) -> None:
                 "INSERT INTO doctors (id, name, speciality, room) VALUES (?, ?, ?, ?)",
                 SEED_DOCTORS,
             )
-            seed_slots(conn)
+        refresh_slots(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def refresh_slots(conn: sqlite3.Connection) -> None:
+    """Drop open slots whose day has passed; top up when the board runs dry."""
+    today = datetime.now().astimezone().date().isoformat()
+    conn.execute(
+        "DELETE FROM slots WHERE status = 'open' AND substr(starts_at, 1, 10) < ?",
+        (today,),
+    )
+    future = conn.execute(
+        "SELECT COUNT(*) AS n FROM slots WHERE status = 'open' AND substr(starts_at, 1, 10) >= ?",
+        (today,),
+    ).fetchone()["n"]
+    if future == 0:
+        seed_slots(conn)
 
 
 def seed_slots(conn: sqlite3.Connection) -> None:

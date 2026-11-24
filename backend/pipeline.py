@@ -157,13 +157,16 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
     class DashboardObserver(BaseObserver):
         def __init__(self) -> None:
             super().__init__()
-            self._last_by_role: dict[str, str] = {}
+            self._last_role = ""
+            self._last_text = ""
 
         async def _say(self, role: str, text: str) -> None:
             text = (text or "").strip()
-            if not text or self._last_by_role.get(role) == text:
+            if not text:
                 return
-            self._last_by_role[role] = text
+            if self._last_role == role and self._last_text == text:
+                return
+            self._last_role, self._last_text = role, text
             try:
                 await publish({"type": "transcript", "role": role, "text": text})
             except Exception:
@@ -238,7 +241,10 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
 
         @transport.event_handler("on_client_disconnected")
         async def on_disconnected(transport: Any, client: Any) -> None:
-            await task.queue_frame(EndFrame())
+            try:
+                await task.queue_frame(EndFrame())
+            except Exception:
+                task.cancel()
 
         runner = PipelineRunner()
         await runner.run(task)

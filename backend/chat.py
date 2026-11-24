@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from collections import OrderedDict
 
 from . import tools
 from .store import normalise_phone, pretty_when
@@ -23,7 +24,19 @@ class ChatSession:
     last_slots: list[dict] = field(default_factory=list)
 
 
-SESSIONS: dict[str, ChatSession] = {}
+SESSIONS: OrderedDict[str, ChatSession] = OrderedDict()
+MAX_SESSIONS = 500
+
+
+def _session(session_id: str) -> ChatSession:
+    key = session_id or "anon"
+    if key not in SESSIONS:
+        SESSIONS[key] = ChatSession()
+        while len(SESSIONS) > MAX_SESSIONS:
+            SESSIONS.popitem(last=False)
+    else:
+        SESSIONS.move_to_end(key)
+    return SESSIONS[key]
 
 
 def _find_phone(text: str) -> str:
@@ -45,7 +58,7 @@ def _looks_book(text: str) -> bool:
 
 def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") -> dict:
     """Run one chat turn. Returns reply plus events the dashboard consumes."""
-    session = SESSIONS.setdefault(session_id or "anon", ChatSession())
+    session = _session(session_id)
     said_phone = _find_phone(text)
     if said_phone:
         session.phone = said_phone

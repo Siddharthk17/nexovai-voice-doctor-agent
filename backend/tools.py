@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .store import connect, normalise_phone
 
@@ -39,6 +39,29 @@ def _doctor_variants(query: str) -> list[str]:
         if plain in low:
             words.append(speciality)
     return words
+
+
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def normalise_date(raw: str) -> tuple[str, str]:
+    """Spoken day -> YYYY-MM-DD. Returns (date, error); empty date means none given."""
+    text = (raw or "").strip().lower()
+    if not text:
+        return "", ""
+    today = datetime.now().date()
+    if text in ("today",):
+        return today.isoformat(), ""
+    if text in ("tomorrow",):
+        return (today + timedelta(days=1)).isoformat(), ""
+    if text in WEEKDAYS:
+        delta = (WEEKDAYS.index(text) - today.weekday()) % 7 or 7
+        return (today + timedelta(days=delta)).isoformat(), ""
+    try:
+        datetime.strptime(text, "%Y-%m-%d")
+        return text, ""
+    except ValueError:
+        return "", f"could not understand the day '{raw.strip()}', ask for a date like next Tuesday"
 
 
 def _doctor_rows(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
@@ -73,19 +96,26 @@ def check_doctor_availability(
                     for d in doctors.values()
                 ],
             }
+        day, day_error = normalise_date(date)
+        if day_error:
+            return {"ok": False, "error": day_error}
+        now = datetime.now().astimezone()
         params: list[str] = []
         where = ["status = 'open'"]
         if matched_ids:
             where.append(f"doctor_id IN ({','.join('?' * len(matched_ids))})")
             params.extend(matched_ids)
-        if date.strip():
+        if day:
             where.append("starts_at LIKE ?")
-            params.append(f"{date.strip()}%")
+            params.append(f"{day}%")
         rows = conn.execute(
             f"""SELECT id, doctor_id, starts_at FROM slots
-                WHERE {' AND '.join(where)} ORDER BY starts_at LIMIT ?""",
-            (*params, MAX_OFFERED_SLOTS),
+                WHERE {' AND '.join(where)} ORDER BY starts_at LIMIT 40""",
+            (*params,),
         ).fetchall()
+        upcoming = [
+            r for r in rows if datetime.fromisoformat(r["starts_at"]) >= now
+        ][:MAX_OFFERED_SLOTS]
         return {
             "ok": True,
             "slots": [
@@ -95,7 +125,7 @@ def check_doctor_availability(
                     "speciality": doctors[r["doctor_id"]]["speciality"],
                     "starts_at": r["starts_at"],
                 }
-                for r in rows
+                for r in upcoming
             ],
         }
     finally:
@@ -122,6 +152,8 @@ def book_appointment(
             return {"ok": False, "error": f"slot '{slot_id.strip()}' does not exist"}
         if slot["status"] != "open":
             return {"ok": False, "error": "that slot was just taken, offer another one"}
+        if datetime.fromisoformat(slot["starts_at"]) < datetime.now().astimezone():
+            return {"ok": False, "error": "that time has already passed, offer another one"}
         doctors = _doctor_rows(conn)
         appointment_id = f"a-{uuid.uuid4().hex[:8]}"
         created = datetime.now().isoformat(timespec="seconds")
@@ -201,13 +233,20 @@ def cancel_appointment(
             ).fetchone()
         assert target is not None
         with conn:
-            conn.execute(
-                "UPDATE appointments SET status = 'cancelled' WHERE id = ?",
+            moved = conn.execute(
+                "UPDATE appointments SET status = 'cancelled' WHERE id = ? AND status = 'booked'",
                 (target["id"],),
             )
-            conn.execute(
-                "UPDATE slots SET status = 'open' WHERE id = ?", (target["slot_id"],)
-            )
+            if moved.rowcount == 0:
+                return {"ok": False, "error": "that appointment is already cancelled"}
+            still_booked = conn.execute(
+                "SELECT COUNT(*) AS n FROM appointments WHERE slot_id = ? AND status = 'booked'",
+                (target["slot_id"],),
+            ).fetchone()["n"]
+            if still_booked == 0:
+                conn.execute(
+                    "UPDATE slots SET status = 'open' WHERE id = ?", (target["slot_id"],)
+                )
         doctors = _doctor_rows(conn)
         return {
             "ok": True,
@@ -231,14 +270,16 @@ def list_appointments(db_path: str, include_cancelled: bool = False) -> list[dic
     conn = connect(db_path)
     try:
         where = "" if include_cancelled else "WHERE a.status = 'booked'"
-        return [
-            dict(r)
-            for r in conn.execute(
-                f"""SELECT a.id, a.starts_at, a.patient_phone, a.patient_name,
-                           a.status, d.name AS doctor, d.speciality, d.room
-                    FROM appointments a JOIN doctors d ON d.id = a.doctor_id
-                    {where} ORDER BY a.starts_at"""
-            )
-        ]
+        out = []
+        for r in conn.execute(
+            f"""SELECT a.id, a.starts_at, a.patient_phone, a.patient_name,
+                       a.status, d.name AS doctor, d.speciality, d.room
+                FROM appointments a JOIN doctors d ON d.id = a.doctor_id
+                {where} ORDER BY a.starts_at"""
+        ):
+            row = dict(r)
+            row["patient_phone"] = "••••••" + row["patient_phone"][-4:]
+            out.append(row)
+        return out
     finally:
         conn.close()

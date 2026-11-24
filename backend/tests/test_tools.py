@@ -86,3 +86,31 @@ def test_plain_words_match_specialities():
 def test_pretty_when_keeps_bad_input():
     assert store.pretty_when("2026-11-25T09:00:00+05:30") == "Wed 25 Nov, 9:00 am"
     assert store.pretty_when("nope") == "nope"
+
+
+def test_double_cancel_keeps_rebooked_slot():
+    db = fresh_db()
+    slot = tools.check_doctor_availability(db)["slots"][0]
+    first = tools.book_appointment(db, "9876543210", slot["slot_id"])
+    assert first["ok"]
+    assert tools.cancel_appointment(db, "9876543210", first["appointment_id"])["ok"]
+    second = tools.book_appointment(db, "9999999999", slot["slot_id"])
+    assert second["ok"]
+    stale = tools.cancel_appointment(db, "9876543210", first["appointment_id"])
+    assert not stale["ok"]
+    still = tools.check_doctor_availability(db)["slots"]
+    assert all(s["slot_id"] != slot["slot_id"] for s in still)
+
+
+def test_spoken_dates_resolve():
+    assert tools.normalise_date("tomorrow")[0] != ""
+    assert tools.normalise_date("tuesday")[0] != ""
+    assert tools.normalise_date("2026-11-25") == ("2026-11-25", "")
+    assert tools.normalise_date("sometime")[1] != ""
+
+
+def test_past_slots_never_offered():
+    db = fresh_db()
+    now = datetime.now().astimezone()
+    for s in tools.check_doctor_availability(db)["slots"]:
+        assert datetime.fromisoformat(s["starts_at"]) >= now
