@@ -9,7 +9,6 @@ line is forwarded to the dashboard hub the same way the REST layer does.
 from __future__ import annotations
 
 import asyncio
-import inspect
 from typing import Any, Awaitable, Callable
 
 import aiohttp
@@ -131,8 +130,9 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
     """Run one WebRTC call. Returns when the caller hangs up."""
     from pipecat.audio.vad.silero import SileroVADAnalyzer
     from pipecat.audio.vad.vad_analyzer import VADParams
-    from pipecat.frames.frames import EndFrame, TextFrame, TranscriptionFrame
-    from pipecat.observers.base_observer import BaseObserver
+    from pipecat.frames.frames import EndFrame, ErrorFrame, TextFrame, TranscriptionFrame
+    from pipecat.processors.frame_processor import FrameDirection
+    from pipecat.observers.base_observer import BaseObserver, FramePushed
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -154,20 +154,29 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
         raise RuntimeError("missing ELEVENLABS_API_KEY or GEMINI_API_KEY")
 
     class DashboardObserver(BaseObserver):
-        async def on_push_frame(self, *args: Any, **kwargs: Any) -> None:
-            frame = kwargs.get("frame", args[0] if args else None)
-            text, role = "", ""
+        def __init__(self) -> None:
+            super().__init__()
+            self._last_by_role: dict[str, str] = {}
+
+        async def _say(self, role: str, text: str) -> None:
+            text = (text or "").strip()
+            if not text or self._last_by_role.get(role) == text:
+                return
+            self._last_by_role[role] = text
+            try:
+                await publish({"type": "transcript", "role": role, "text": text})
+            except Exception:
+                pass
+
+        async def on_push_frame(self, data: FramePushed) -> None:
+            frame = data.frame
             if isinstance(frame, TranscriptionFrame):
-                text, role = frame.text, "caller"
-            elif isinstance(frame, TextFrame) and getattr(frame, "text", ""):
-                sig = inspect.signature(self.on_push_frame)
-                direction = kwargs.get("direction", None)
-                name = getattr(direction, "name", str(direction))
-                if name == "DOWNSTREAM":
-                    text, role = frame.text, "agent"
-            if text:
+                await self._say("caller", frame.text)
+            elif isinstance(frame, TextFrame) and data.direction == FrameDirection.DOWNSTREAM:
+                await self._say("agent", frame.text)
+            elif isinstance(frame, ErrorFrame):
                 try:
-                    await publish({"type": "transcript", "role": role, "text": text})
+                    await publish({"type": "call_error", "error": str(frame.error)[:200]})
                 except Exception:
                     pass
 
@@ -185,7 +194,7 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
         stt = ElevenLabsSTTService(
             api_key=settings.elevenlabs_key,
             aiohttp_session=session,
-            settings={"model": settings.elevenlabs_stt_model},
+            model=settings.elevenlabs_stt_model,
         )
         llm = GoogleLLMService(
             api_key=settings.gemini_key,
@@ -232,17 +241,3 @@ async def run_call(connection: Any, settings: Any, publish: PublishFn) -> None:
 
         runner = PipelineRunner()
         await runner.run(task)
-
-
-def run_blocking(connection: Any, settings: Any, publish_sync: Callable[[dict], None]) -> None:
-    """Thread entry: bridge sync hub publishing into the async pipeline."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    async def publish(event: dict) -> None:
-        await loop.run_in_executor(None, publish_sync, event)
-
-    try:
-        loop.run_until_complete(run_call(connection, settings, publish))
-    finally:
-        loop.close()

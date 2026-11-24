@@ -104,8 +104,6 @@ def webrtc_handler():
 @app.post("/api/call/offer")
 async def call_offer(body: OfferIn):
     """WebRTC signalling: browser posts its SDP offer, gets an answer."""
-    import threading
-
     from pipecat.transports.smallwebrtc.request_handler import SmallWebRTCRequest
 
     from . import pipeline as voice
@@ -114,21 +112,22 @@ async def call_offer(body: OfferIn):
     if not s.voice_ready:
         return {"ok": False, "error": "voice keys missing, use text chat below instead"}
 
-    started: list[str] = []
-
     async def on_connection(connection) -> None:
-        main_loop = asyncio.get_running_loop()
+        async def publish(event: dict) -> None:
+            try:
+                await hub.publish(event)
+            except Exception:
+                pass
 
-        def publish_sync(event: dict) -> None:
-            asyncio.run_coroutine_threadsafe(hub.publish(event), main_loop)
-
-        thread = threading.Thread(
-            target=voice.run_blocking,
-            args=(connection, s, publish_sync),
-            daemon=True,
+        pipeline_task = asyncio.get_running_loop().create_task(
+            voice.run_call(connection, s, publish)
         )
-        thread.start()
-        started.append(connection.pc_id)
+
+        def _log_failure(task: asyncio.Task) -> None:
+            if not task.cancelled() and task.exception() is not None:
+                print(f"voice pipeline failed: {task.exception()!r}", flush=True)
+
+        pipeline_task.add_done_callback(_log_failure)
         await hub.publish({"type": "call_started", "pc_id": connection.pc_id})
 
     answer = await webrtc_handler().handle_web_request(

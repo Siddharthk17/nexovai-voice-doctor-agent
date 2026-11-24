@@ -67,6 +67,8 @@ export default function App() {
           pushLine("system", `Booked ${appt.doctor} on ${appt.starts_at}`);
         } else if (msg.type === "caller_known" && typeof msg.phone === "string") {
           setCallerPhone(msg.phone);
+        } else if (msg.type === "call_error") {
+          pushLine("system", "The voice model hit an error. Your bookings are safe — try the text box.");
         }
       };
       sock.onclose = () => {
