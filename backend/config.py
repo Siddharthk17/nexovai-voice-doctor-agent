@@ -16,6 +16,7 @@ class Settings:
     gemini_model: str
     port: int
     db_path: str
+    frontend_origin: str
 
     @property
     def voice_ready(self) -> bool:
@@ -32,4 +33,5 @@ def load_settings() -> Settings:
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         port=int(os.getenv("PORT", "7860")),
         db_path=os.getenv("DB_PATH", "./appoint.db"),
+        frontend_origin=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"),
     )
