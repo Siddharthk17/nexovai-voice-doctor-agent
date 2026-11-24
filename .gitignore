@@ -1,0 +1,15 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+.env
+.pytest_cache/
+
+# node
+frontend/node_modules/
+frontend/dist/
+
+# os
+.DS_Store
