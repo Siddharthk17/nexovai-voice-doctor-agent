@@ -24,6 +24,13 @@ const STATE_WORDS: Record<CallState, string> = {
   failed: "Could not connect",
 };
 
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${day} · ${time}`;
+}
+
 export default function PhoneDock({ open, dial, onClose, lines, pushLine, confirm, sessionId }: Props) {
   const [call] = useState(() => new VoiceCall());
   const [state, setState] = useState<CallState>("ended");
@@ -89,6 +96,7 @@ export default function PhoneDock({ open, dial, onClose, lines, pushLine, confir
           <strong>{STATE_WORDS[state]}</strong>
           {detail ? ` — ${detail}` : ""}
           {state === "connected" ? <span className="phone-timer"> · {mm}:{ss}</span> : null}
+          <button className="dock-close" onClick={close} aria-label="Close call panel">Close</button>
         </div>
         <div className="phone-name">Front desk</div>
         <Waveform analyser={() => call.analyser} live={state === "connected"} />
@@ -112,7 +120,7 @@ export default function PhoneDock({ open, dial, onClose, lines, pushLine, confir
         {confirm ? (
           <div className="confirm-card">
             <strong>Booked — {confirm.doctor}</strong>
-            {confirm.starts_at} · {confirm.appointment_id}
+            {fmtWhen(confirm.starts_at)} · {confirm.appointment_id}
           </div>
         ) : null}
 

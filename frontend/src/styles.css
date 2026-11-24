@@ -190,6 +190,18 @@ body {
 .phone-state { font-size: 14px; color: #a9c4c1; }
 .phone-state strong { color: #fff; }
 
+.dock-close {
+  float: right;
+  font: inherit;
+  font-size: 13.5px;
+  background: transparent;
+  border: 0;
+  color: #a9c4c1;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .phone-name {
   font-family: var(--font-display);
   font-size: 34px;
