@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, socketUrl, type Appointment, type DashEvent, type Doctor } from "./api";
+import { api, socketUrl, type Appointment, type DashEvent, type Doctor, type Slot } from "./api";
 import PhoneDock, { type Line } from "./PhoneDock";
 
 function fmtDay(iso: string): string {
@@ -23,6 +23,7 @@ export default function App() {
   const [highlight, setHighlight] = useState("");
   const [callerPhone, setCallerPhone] = useState("");
   const [dial, setDial] = useState(0);
+  const [dockSlots, setDockSlots] = useState<Slot[]>([]);
   const sessionId = useMemo(() => `desk-${Math.random().toString(36).slice(2, 8)}`, []);
   const retry = useRef(0);
 
@@ -104,10 +105,22 @@ export default function App() {
     const out = await api.book(callerPhone, slotId);
     if (out.ok) {
       setConfirm(out as unknown as Record<string, string>);
+      setDockSlots([]);
       void refresh();
     } else {
       pushLine("agent", String(out.error ?? "That slot is gone, pick another."));
       setPhoneOpen(true);
+    }
+  };
+
+  const sendDockChat = async (text: string) => {
+    pushLine("caller", text);
+    try {
+      const out = await api.chat(sessionId, text);
+      pushLine("agent", out.reply);
+      setDockSlots(out.slots ?? []);
+    } catch {
+      pushLine("agent", "The desk is unreachable. Check the server and try again.");
     }
   };
 
@@ -174,9 +187,10 @@ export default function App() {
         dial={dial}
         onClose={() => setPhoneOpen(false)}
         lines={lines}
-        pushLine={pushLine}
         confirm={confirm}
-        sessionId={sessionId}
+        slots={dockSlots}
+        onPickSlot={(id) => void bookSlot(id)}
+        onSendChat={(text) => void sendDockChat(text)}
       />
     </>
   );

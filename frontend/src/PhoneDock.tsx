@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { VoiceCall, type CallState } from "./call";
-import { api } from "./api";
+import type { Slot } from "./api";
 import { playEnd, startRing, stopRing } from "./sounds";
 import Waveform from "./Waveform";
 
@@ -11,9 +11,10 @@ type Props = {
   dial: number;
   onClose: () => void;
   lines: Line[];
-  pushLine: (role: string, text: string) => void;
   confirm: Record<string, string> | null;
-  sessionId: string;
+  slots: Slot[];
+  onPickSlot: (slot_id: string) => void;
+  onSendChat: (text: string) => void;
 };
 
 const STATE_WORDS: Record<CallState, string> = {
@@ -31,7 +32,14 @@ function fmtWhen(iso: string): string {
   return `${day} · ${time}`;
 }
 
-export default function PhoneDock({ open, dial, onClose, lines, pushLine, confirm, sessionId }: Props) {
+function fmtChip(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-IN", { weekday: "short" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${day} ${time}`;
+}
+
+export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, onPickSlot, onSendChat }: Props) {
   const [call] = useState(() => new VoiceCall());
   const [state, setState] = useState<CallState>("ended");
   const [detail, setDetail] = useState("");
@@ -70,17 +78,11 @@ export default function PhoneDock({ open, dial, onClose, lines, pushLine, confir
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
 
-  const sendChat = async () => {
+  const sendChat = () => {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    pushLine("caller", text);
-    try {
-      const out = await api.chat(sessionId, text);
-      pushLine("agent", out.reply);
-    } catch {
-      pushLine("agent", "The desk is unreachable. Check the server and try again.");
-    }
+    onSendChat(text);
   };
 
   const close = () => {
@@ -116,6 +118,16 @@ export default function PhoneDock({ open, dial, onClose, lines, pushLine, confir
           )}
           <div ref={endRef} />
         </div>
+
+        {slots.length > 0 ? (
+          <div className="slots dock-slots">
+            {slots.map((s) => (
+              <button key={s.slot_id} className="slot light" onClick={() => onPickSlot(s.slot_id)}>
+                {fmtChip(s.starts_at)}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {confirm ? (
           <div className="confirm-card">

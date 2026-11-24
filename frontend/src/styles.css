@@ -293,6 +293,11 @@ body {
   cursor: pointer;
 }
 
+.dock-slots { margin: 0; }
+
+.slot.light { background: #0d4a47; color: #eef4f3; }
+.slot.light:hover { background: #155e5a; }
+
 .scrim {
   position: fixed;
   inset: 0;
