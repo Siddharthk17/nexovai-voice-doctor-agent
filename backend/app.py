@@ -81,6 +81,66 @@ class ChatIn(BaseModel):
     slot_id: str = ""
 
 
+class OfferIn(BaseModel):
+    sdp: str
+    type: str = "offer"
+    pc_id: str | None = None
+
+
+_webrtc_handler = None
+
+
+def webrtc_handler():
+    global _webrtc_handler
+    if _webrtc_handler is None:
+        from pipecat.transports.smallwebrtc.request_handler import (
+            SmallWebRTCRequestHandler,
+        )
+
+        _webrtc_handler = SmallWebRTCRequestHandler()
+    return _webrtc_handler
+
+
+@app.post("/api/call/offer")
+async def call_offer(body: OfferIn):
+    """WebRTC signalling: browser posts its SDP offer, gets an answer."""
+    import threading
+
+    from pipecat.transports.smallwebrtc.request_handler import SmallWebRTCRequest
+
+    from . import pipeline as voice
+
+    s = settings()
+    if not s.voice_ready:
+        return {"ok": False, "error": "voice keys missing, use text chat below instead"}
+
+    started: list[str] = []
+
+    async def on_connection(connection) -> None:
+        main_loop = asyncio.get_running_loop()
+
+        def publish_sync(event: dict) -> None:
+            asyncio.run_coroutine_threadsafe(hub.publish(event), main_loop)
+
+        thread = threading.Thread(
+            target=voice.run_blocking,
+            args=(connection, s, publish_sync),
+            daemon=True,
+        )
+        thread.start()
+        started.append(connection.pc_id)
+        await hub.publish({"type": "call_started", "pc_id": connection.pc_id})
+
+    answer = await webrtc_handler().handle_web_request(
+        SmallWebRTCRequest(sdp=body.sdp, type=body.type, pc_id=body.pc_id),
+        on_connection,
+    )
+    if not answer:
+        return {"ok": False, "error": "webrtc negotiation failed"}
+    await hub.publish({"type": "transcript", "role": "agent", "text": "Hello, NexovAI Care. What do you need today?"})
+    return {"ok": True, **answer}
+
+
 def settings():
     return app.state.settings
 
