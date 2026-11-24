@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { VoiceCall, type CallState } from "./call";
-import type { Slot } from "./api";
+import type { Appointment, Slot } from "./api";
 import { playEnd, startRing, stopRing } from "./sounds";
 import Waveform from "./Waveform";
 
@@ -14,6 +14,8 @@ type Props = {
   confirm: Record<string, string> | null;
   slots: Slot[];
   onPickSlot: (slot_id: string) => void;
+  choices: Appointment[];
+  onPickChoice: (appointment_id: string) => void;
   onSendChat: (text: string) => void;
 };
 
@@ -40,7 +42,7 @@ function fmtChip(iso: string): string {
   return `${day} ${time}`;
 }
 
-export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, onPickSlot, onSendChat }: Props) {
+export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, onPickSlot, choices, onPickChoice, onSendChat }: Props) {
   const [call] = useState(() => new VoiceCall());
   const [state, setState] = useState<CallState>("idle");
   const [detail, setDetail] = useState("");
@@ -125,6 +127,16 @@ export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, 
             {slots.map((s) => (
               <button key={s.slot_id} className="slot light" onClick={() => onPickSlot(s.slot_id)}>
                 {fmtChip(s.starts_at)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {choices.length > 0 ? (
+          <div className="slots dock-slots">
+            {choices.map((c) => (
+              <button key={c.id} className="slot light" onClick={() => onPickChoice(c.id)}>
+                Cancel {c.doctor.split(" ").slice(-1)} · {fmtChip(c.starts_at)}
               </button>
             ))}
           </div>

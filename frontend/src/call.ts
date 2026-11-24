@@ -7,6 +7,7 @@ export class VoiceCall {
   private pc: RTCPeerConnection | null = null;
   private local: MediaStream | null = null;
   private remoteAudio: HTMLAudioElement | null = null;
+  private audioCtx: AudioContext | null = null;
   analyser: AnalyserNode | null = null;
   onstate: (s: CallState, detail?: string) => void = () => {};
   pcId: string | null = null;
@@ -27,6 +28,7 @@ export class VoiceCall {
       this.local.getTracks().forEach((t) => this.pc!.addTrack(t, this.local!));
 
       const ctx = new AudioContext();
+      this.audioCtx = ctx;
       const src = ctx.createMediaStreamSource(this.local);
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 256;
@@ -39,8 +41,7 @@ export class VoiceCall {
         this.onstate("connected");
       };
       this.pc.onconnectionstatechange = () => {
-        const st = this.pc?.connectionState;
-        if (st === "failed" || st === "disconnected") this.hangup("failed");
+        if (this.pc?.connectionState === "failed") this.hangup("failed");
       };
 
       const offer = await this.pc.createOffer({ offerToReceiveAudio: true });
@@ -69,10 +70,14 @@ export class VoiceCall {
       this.local?.getTracks().forEach((t) => t.stop());
       this.remoteAudio?.pause();
       this.pc?.close();
+      void this.audioCtx?.close().catch(() => {});
     } finally {
       this.pc = null;
       this.local = null;
-      this.onstate(as, detail);
+      this.audioCtx = null;
+      this.analyser = null;
+      this.pcId = null;
+      if (as !== "idle") this.onstate(as, detail);
     }
   }
 }

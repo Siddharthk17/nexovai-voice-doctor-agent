@@ -24,6 +24,9 @@ export default function App() {
   const [callerPhone, setCallerPhone] = useState("");
   const [dial, setDial] = useState(0);
   const [dockSlots, setDockSlots] = useState<Slot[]>([]);
+  const [dockChoices, setDockChoices] = useState<Appointment[]>([]);
+  const phoneOpenRef = useRef(phoneOpen);
+  phoneOpenRef.current = phoneOpen;
   const sessionId = useMemo(() => `desk-${Math.random().toString(36).slice(2, 8)}`, []);
   const retry = useRef(0);
 
@@ -55,7 +58,7 @@ export default function App() {
         }
         if (msg.type === "transcript") {
           pushLine(String(msg.role), String(msg.text));
-          if (!phoneOpen) setPhoneOpen(true);
+          if (!phoneOpenRef.current) setPhoneOpen(true);
         } else if (msg.type === "appointments_changed") {
           void refresh().catch(() => {});
           if (typeof msg.highlight === "string") {
@@ -86,7 +89,7 @@ export default function App() {
       closed = true;
       sock?.close();
     };
-  }, [refresh, pushLine, phoneOpen]);
+  }, [refresh, pushLine]);
 
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
@@ -122,9 +125,23 @@ export default function App() {
       const out = await api.chat(sessionId, text);
       pushLine("agent", out.reply);
       setDockSlots(out.slots ?? []);
+      setDockChoices(out.choices ?? []);
+      if (out.phone) setCallerPhone(out.phone);
       if (out.cancelled_id) setConfirm(null);
     } catch {
       pushLine("agent", "The desk is unreachable. Check the server and try again.");
+    }
+  };
+
+  const cancelChoice = async (appointmentId: string) => {
+    if (!callerPhone) return;
+    const out = await api.cancel(callerPhone, appointmentId);
+    if (out.ok) {
+      setConfirm(null);
+      setDockChoices([]);
+      void refresh();
+    } else {
+      pushLine("agent", String((out as { error?: string }).error ?? "Could not cancel that one."));
     }
   };
 
@@ -194,6 +211,8 @@ export default function App() {
         confirm={confirm}
         slots={dockSlots}
         onPickSlot={(id) => void bookSlot(id)}
+        choices={dockChoices}
+        onPickChoice={(id) => void cancelChoice(id)}
         onSendChat={(text) => void sendDockChat(text)}
       />
     </>
