@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from . import tools
 from .store import normalise_phone
@@ -43,6 +44,14 @@ def _looks_book(text: str) -> bool:
     return any(w in low for w in ("book", "confirm", "reserve", "schedule", "appointment for"))
 
 
+def _pretty(iso: str) -> str:
+    try:
+        d = datetime.fromisoformat(iso)
+        return d.strftime("%a %-d %b, %-I:%M %p").replace("AM", "am").replace("PM", "pm")
+    except ValueError:
+        return iso
+
+
 def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") -> dict:
     """Run one chat turn. Returns reply plus events the dashboard consumes."""
     session = SESSIONS.setdefault(session_id or "anon", ChatSession())
@@ -51,6 +60,18 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
         session.phone = said_phone
     phone = session.phone
     events: list[dict] = []
+
+    if said_phone and not _looks_cancel(text) and not _looks_book(text):
+        bare = re.sub(
+            r"(my\s+)?(phone\s+number|number|phone)\s+(is\s+)?|it'?s\s+",
+            " ",
+            (text or "").lower(),
+        ).strip(" ,.")
+        if normalise_phone(bare) == said_phone:
+            return {
+                "reply": f"Noted — {said_phone}. Which doctor do you want to see?",
+                "events": events, "phone": phone,
+            }
 
     if _looks_cancel(text):
         if not phone:
@@ -81,7 +102,7 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
             events.append({"type": "appointments_changed", "highlight": out["appointment_id"]})
             events.append({"type": "booking_confirmed", "appointment": out})
             return {
-                "reply": f"Booked with {out['doctor']} on {out['starts_at']}. Booking {out['appointment_id']}.",
+                "reply": f"Booked with {out['doctor']} on {_pretty(out['starts_at'])}. Booking {out['appointment_id']}.",
                 "events": events, "phone": phone,
             }
         return {"reply": f"Could not book: {out['error']}.", "events": events, "phone": phone}
@@ -99,5 +120,5 @@ def handle_message(db_path: str, session_id: str, text: str, slot_id: str = "") 
         return {"reply": "Nothing open for that search. Try another doctor or day.", "events": events}
     session.last_slots = out["slots"]
     first = out["slots"][0]
-    reply = f"{len(out['slots'])} open. Earliest: {first['doctor']} on {first['starts_at']}."
+    reply = f"{len(out['slots'])} open. Earliest: {first['doctor']} on {_pretty(first['starts_at'])}."
     return {"reply": reply, "events": events, "slots": out["slots"], "phone": phone}
