@@ -177,6 +177,7 @@ export default function PhoneDock({ open, dial, onClose, lines, confirm, slots, 
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Type instead of talking"
+            aria-label="Type a message to the front desk instead of talking"
             onKeyDown={(e) => {
               if (e.key === "Enter") void sendChat();
             }}

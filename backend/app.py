@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -47,6 +48,7 @@ class Hub:
 
 
 hub = Hub()
+logger = logging.getLogger("nexovai.desk")
 
 
 @asynccontextmanager
@@ -132,7 +134,7 @@ async def call_offer(body: OfferIn):
         def _log_failure(task: asyncio.Task) -> None:
             if task.cancelled() or task.exception() is None:
                 return
-            print(f"voice pipeline failed: {task.exception()!r}", flush=True)
+            logger.error("voice pipeline failed: %r", task.exception())
             asyncio.get_running_loop().create_task(
                 hub.publish({"type": "call_error", "error": "voice pipeline stopped"})
             )

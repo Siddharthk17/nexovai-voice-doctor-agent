@@ -65,9 +65,24 @@ backend/pipeline.py   Pipecat pipeline (STT → LLM → TTS, VAD, tools)
 backend/tools.py      availability / booking / cancellation
 backend/store.py      SQLite schema, seed doctors and slots
 backend/chat.py       text fallback sharing the same tools
+backend/config.py     environment settings, no secrets in code
+backend/agent_prompt.py  front-desk voice prompt
 backend/tests/        pytest suite for the booking rules
 frontend/src/         ledger panels, phone dock, waveform, sounds
 ```
+
+## Endpoints
+
+| Method | Path | What |
+|---|---|---|
+| GET | `/api/health` | voice readiness, counts |
+| GET | `/api/doctors` | doctors with upcoming open slots |
+| GET | `/api/appointments` | day book, phones masked |
+| POST | `/api/book` | book a slot: `phone`, `slot_id`, `patient_name` |
+| POST | `/api/cancel` | cancel: `phone`, optional `appointment_id` |
+| POST | `/api/chat` | text fallback sharing the same tools |
+| POST | `/api/call/offer` | WebRTC SDP offer → answer, starts a call |
+| WS | `/ws/dashboard` | transcript, booking and call events |
 
 ## Check
 

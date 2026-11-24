@@ -8,7 +8,6 @@ line is forwarded to the dashboard hub the same way the REST layer does.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Awaitable, Callable
 
 import aiohttp

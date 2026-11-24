@@ -185,7 +185,7 @@ body {
   z-index: 20;
 }
 
-.phone-dock.hidden { transform: translateX(105%); }
+.phone-dock.hidden { transform: translateX(105%); visibility: hidden; }
 
 .phone-state { font-size: 14px; color: #a9c4c1; }
 .phone-state strong { color: #fff; }
@@ -311,7 +311,7 @@ body {
   .layout { grid-template-columns: 1fr; padding: 0 16px 120px; }
   .topbar { padding: 16px 16px 12px; }
   .phone-dock { top: auto; bottom: 0; height: min(82svh, 640px); width: 100vw; }
-  .phone-dock.hidden { transform: translateY(105%); }
+  .phone-dock.hidden { transform: translateY(105%); visibility: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {

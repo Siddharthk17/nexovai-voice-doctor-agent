@@ -91,10 +91,19 @@ def init_db(db_path: str | Path) -> None:
 
 
 def refresh_slots(conn: sqlite3.Connection) -> None:
-    """Drop open slots whose day has passed; top up when the board runs dry."""
+    """Drop open slots whose day has passed; top up when the board runs dry.
+
+    Retention: cancelled appointments older than today are deleted. Booked
+    history stays as the audit trail.
+    """
     today = datetime.now().astimezone().date().isoformat()
     conn.execute(
         "DELETE FROM slots WHERE status = 'open' AND substr(starts_at, 1, 10) < ?",
+        (today,),
+    )
+    conn.execute(
+        """DELETE FROM appointments
+           WHERE status = 'cancelled' AND substr(starts_at, 1, 10) < ?""",
         (today,),
     )
     future = conn.execute(
